@@ -1,0 +1,17 @@
+# Python 编译文件
+__pycache__/
+*.py[cod]
+
+# 虚拟环境 (根据你的命名调整)
+venv/
+env/
+.env
+
+# IDE 配置文件 (如果你用 VSCode 或 PyCharm)
+.vscode/
+.idea/
+
+# Mac 系统文件
+.DS_Store
+
+data/

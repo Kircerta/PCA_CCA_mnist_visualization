@@ -1,0 +1,309 @@
+<html>
+<head>
+<title>STA437_Final_Project_Code.ipynb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #bcbec4;}
+.s1 { color: #cf8e6d;}
+.s2 { color: #bcbec4;}
+.s3 { color: #7a7e85;}
+.s4 { color: #6aab73;}
+.s5 { color: #2aacb8;}
+.s6 { color: #5f826b; font-style: italic;}
+.ls0 { height: 1px; border-width: 0; color: #43454a; background-color:#43454a}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+STA437_Final_Project_Code.ipynb</font>
+</center></td></tr></table>
+<pre><span class="s0">#%% md 
+### 1. Environment Config <hr class="ls0">#%% 
+</span><span class="s1">import </span><span class="s0">pandas </span><span class="s1">as </span><span class="s0">pd</span>
+<span class="s1">import </span><span class="s0">numpy </span><span class="s1">as </span><span class="s0">np</span>
+<span class="s1">import </span><span class="s0">matplotlib</span><span class="s2">.</span><span class="s0">pyplot </span><span class="s1">as </span><span class="s0">plt</span>
+<span class="s1">import </span><span class="s0">seaborn </span><span class="s1">as </span><span class="s0">sns</span>
+<span class="s1">from </span><span class="s0">sklearn</span><span class="s2">.</span><span class="s0">cross_decomposition </span><span class="s1">import </span><span class="s0">CCA</span>
+<span class="s1">from </span><span class="s0">sklearn</span><span class="s2">.</span><span class="s0">decomposition </span><span class="s1">import </span><span class="s0">PCA</span>
+<span class="s1">from </span><span class="s0">sklearn</span><span class="s2">.</span><span class="s0">preprocessing </span><span class="s1">import </span><span class="s0">StandardScaler</span>
+<span class="s1">from </span><span class="s0">sklearn</span><span class="s2">.</span><span class="s0">feature_selection </span><span class="s1">import </span><span class="s0">VarianceThreshold</span>
+<span class="s1">import </span><span class="s0">os</span>
+
+<span class="s3"># 全局配置</span>
+<span class="s0">DATA_PATH </span><span class="s2">= </span><span class="s4">&quot;mnist.csv&quot;</span>
+<span class="s3"># 统一绘图风格</span>
+<span class="s0">sns</span><span class="s2">.</span><span class="s0">set_theme</span><span class="s2">(</span><span class="s0">style</span><span class="s2">=</span><span class="s4">&quot;whitegrid&quot;</span><span class="s2">, </span><span class="s0">context</span><span class="s2">=</span><span class="s4">&quot;paper&quot;</span><span class="s2">, </span><span class="s0">font_scale</span><span class="s2">=</span><span class="s5">1.2</span><span class="s2">)</span>
+
+<span class="s3"># 确保图片保存目录存在 (可选)</span>
+<span class="s1">if not </span><span class="s0">os</span><span class="s2">.</span><span class="s0">path</span><span class="s2">.</span><span class="s0">exists</span><span class="s2">(</span><span class="s4">&quot;plots&quot;</span><span class="s2">):</span>
+    <span class="s0">os</span><span class="s2">.</span><span class="s0">makedirs</span><span class="s2">(</span><span class="s4">&quot;plots&quot;</span><span class="s2">)</span>
+
+<span class="s0">print</span><span class="s2">(</span><span class="s4">&quot;Libraries imported and configuration set.&quot;</span><span class="s2">)</span><hr class="ls0"><span class="s0">#%% md 
+### 2.Loading and Processing Data <hr class="ls0">#%% 
+</span><span class="s1">def </span><span class="s0">load_data_global</span><span class="s2">(</span><span class="s0">path</span><span class="s2">, </span><span class="s0">sample_size</span><span class="s2">=</span><span class="s1">None</span><span class="s2">):</span>
+    <span class="s6">&quot;&quot;&quot; 
+    加载数据并进行基础预处理。 
+    如果数据量过大，可以通过 sample_size 进行采样调试。 
+    &quot;&quot;&quot;</span>
+    <span class="s0">print</span><span class="s2">(</span><span class="s4">f&quot;Loading data from </span><span class="s1">{</span><span class="s0">path</span><span class="s1">}</span><span class="s4">...&quot;</span><span class="s2">)</span>
+    <span class="s1">if not </span><span class="s0">os</span><span class="s2">.</span><span class="s0">path</span><span class="s2">.</span><span class="s0">exists</span><span class="s2">(</span><span class="s0">path</span><span class="s2">):</span>
+        <span class="s0">print</span><span class="s2">(</span><span class="s4">&quot;Error: File not found. Please check DATA_PATH.&quot;</span><span class="s2">)</span>
+        <span class="s1">return None</span><span class="s2">, </span><span class="s1">None</span>
+
+    <span class="s0">df </span><span class="s2">= </span><span class="s0">pd</span><span class="s2">.</span><span class="s0">read_csv</span><span class="s2">(</span><span class="s0">path</span><span class="s2">)</span>
+
+    <span class="s3"># 采样逻辑 (可选，正式运行时建议设为 None 或 10000+)</span>
+    <span class="s1">if </span><span class="s0">sample_size </span><span class="s1">and </span><span class="s0">len</span><span class="s2">(</span><span class="s0">df</span><span class="s2">) &gt; </span><span class="s0">sample_size</span><span class="s2">:</span>
+        <span class="s0">df </span><span class="s2">= </span><span class="s0">df</span><span class="s2">.</span><span class="s0">sample</span><span class="s2">(</span><span class="s0">sample_size</span><span class="s2">, </span><span class="s0">random_state</span><span class="s2">=</span><span class="s5">42</span><span class="s2">)</span>
+        <span class="s0">print</span><span class="s2">(</span><span class="s4">f&quot;Data sampled to </span><span class="s1">{</span><span class="s0">sample_size</span><span class="s1">} </span><span class="s4">rows.&quot;</span><span class="s2">)</span>
+
+    <span class="s0">y </span><span class="s2">= </span><span class="s0">df</span><span class="s2">.</span><span class="s0">iloc</span><span class="s2">[:, </span><span class="s5">0</span><span class="s2">].</span><span class="s0">values</span>
+    <span class="s0">X </span><span class="s2">= </span><span class="s0">df</span><span class="s2">.</span><span class="s0">iloc</span><span class="s2">[:, </span><span class="s5">1</span><span class="s2">:].</span><span class="s0">values</span>
+
+    <span class="s0">print</span><span class="s2">(</span><span class="s4">f&quot;Data Loaded Successfully. Shape: </span><span class="s1">{</span><span class="s0">X</span><span class="s2">.</span><span class="s0">shape</span><span class="s1">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+    <span class="s1">return </span><span class="s0">X</span><span class="s2">, </span><span class="s0">y</span>
+
+<span class="s3"># --- 执行加载 ---</span>
+<span class="s3"># 建议：正式跑的时候可以使用全部数据，或者 sample_size=10000 以获得稳定结果</span>
+<span class="s0">X_global</span><span class="s2">, </span><span class="s0">y_global </span><span class="s2">= </span><span class="s0">load_data_global</span><span class="s2">(</span><span class="s0">DATA_PATH</span><span class="s2">, </span><span class="s0">sample_size</span><span class="s2">=</span><span class="s5">10000</span><span class="s2">)</span><hr class="ls0"><span class="s0">#%% md 
+### 3. Define Visualizations <hr class="ls0">#%% 
+</span><span class="s1">def </span><span class="s0">run_heat_plot_analysis</span><span class="s2">(</span><span class="s0">X</span><span class="s2">, </span><span class="s0">y</span><span class="s2">):</span>
+    <span class="s0">print</span><span class="s2">(</span><span class="s4">&quot;</span><span class="s1">\n</span><span class="s4">--- Running Visual Structure Analysis (Heat Plot) ---&quot;</span><span class="s2">)</span>
+
+    <span class="s3"># 1. 实验 A: &quot;平均脸&quot; 对比 (The Average Digit)</span>
+    <span class="s0">digits_to_show </span><span class="s2">= [</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s5">2</span><span class="s2">, </span><span class="s5">8</span><span class="s2">]</span>
+    <span class="s0">fig</span><span class="s2">, </span><span class="s0">axes </span><span class="s2">= </span><span class="s0">plt</span><span class="s2">.</span><span class="s0">subplots</span><span class="s2">(</span><span class="s5">1</span><span class="s2">, </span><span class="s5">4</span><span class="s2">, </span><span class="s0">figsize</span><span class="s2">=(</span><span class="s5">16</span><span class="s2">, </span><span class="s5">4</span><span class="s2">))</span>
+
+    <span class="s1">for </span><span class="s0">i</span><span class="s2">, </span><span class="s0">digit </span><span class="s1">in </span><span class="s0">enumerate</span><span class="s2">(</span><span class="s0">digits_to_show</span><span class="s2">):</span>
+        <span class="s0">X_digit </span><span class="s2">= </span><span class="s0">X</span><span class="s2">[</span><span class="s0">y </span><span class="s2">== </span><span class="s0">digit</span><span class="s2">]</span>
+        <span class="s1">if </span><span class="s0">len</span><span class="s2">(</span><span class="s0">X_digit</span><span class="s2">) &gt; </span><span class="s5">0</span><span class="s2">:</span>
+            <span class="s0">mean_img </span><span class="s2">= </span><span class="s0">X_digit</span><span class="s2">.</span><span class="s0">mean</span><span class="s2">(</span><span class="s0">axis</span><span class="s2">=</span><span class="s5">0</span><span class="s2">).</span><span class="s0">reshape</span><span class="s2">(</span><span class="s5">28</span><span class="s2">, </span><span class="s5">28</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">i</span><span class="s2">].</span><span class="s0">imshow</span><span class="s2">(</span><span class="s0">mean_img</span><span class="s2">, </span><span class="s0">cmap</span><span class="s2">=</span><span class="s4">'jet'</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">i</span><span class="s2">].</span><span class="s0">set_title</span><span class="s2">(</span><span class="s4">f&quot;Average Digit '</span><span class="s1">{</span><span class="s0">digit</span><span class="s1">}</span><span class="s4">'&quot;</span><span class="s2">)</span>
+        <span class="s0">axes</span><span class="s2">[</span><span class="s0">i</span><span class="s2">].</span><span class="s0">axis</span><span class="s2">(</span><span class="s4">'off'</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">suptitle</span><span class="s2">(</span><span class="s4">&quot;Experiment A: Average Pixel Intensity (Heatmap)&quot;</span><span class="s2">, </span><span class="s0">fontsize</span><span class="s2">=</span><span class="s5">16</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">show</span><span class="s2">()</span>
+
+    <span class="s3"># 2. 实验 B: 左右切分特写 (Left vs Right Split)</span>
+    <span class="s0">target_digits </span><span class="s2">= [</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">]</span>
+    <span class="s0">fig</span><span class="s2">, </span><span class="s0">axes </span><span class="s2">= </span><span class="s0">plt</span><span class="s2">.</span><span class="s0">subplots</span><span class="s2">(</span><span class="s5">2</span><span class="s2">, </span><span class="s5">3</span><span class="s2">, </span><span class="s0">figsize</span><span class="s2">=(</span><span class="s5">10</span><span class="s2">, </span><span class="s5">6</span><span class="s2">))</span>
+
+    <span class="s1">for </span><span class="s0">row_idx</span><span class="s2">, </span><span class="s0">digit </span><span class="s1">in </span><span class="s0">enumerate</span><span class="s2">(</span><span class="s0">target_digits</span><span class="s2">):</span>
+        <span class="s0">indices </span><span class="s2">= </span><span class="s0">np</span><span class="s2">.</span><span class="s0">where</span><span class="s2">(</span><span class="s0">y </span><span class="s2">== </span><span class="s0">digit</span><span class="s2">)[</span><span class="s5">0</span><span class="s2">]</span>
+        <span class="s1">if </span><span class="s0">len</span><span class="s2">(</span><span class="s0">indices</span><span class="s2">) &gt;= </span><span class="s5">2</span><span class="s2">:</span>
+            <span class="s3"># 随机选 1 个样本演示</span>
+            <span class="s0">idx </span><span class="s2">= </span><span class="s0">indices</span><span class="s2">[</span><span class="s5">0</span><span class="s2">]</span>
+            <span class="s0">img </span><span class="s2">= </span><span class="s0">X</span><span class="s2">[</span><span class="s0">idx</span><span class="s2">].</span><span class="s0">reshape</span><span class="s2">(</span><span class="s5">28</span><span class="s2">, </span><span class="s5">28</span><span class="s2">)</span>
+
+            <span class="s3"># 左半边 (前14列)</span>
+            <span class="s0">left_half </span><span class="s2">= </span><span class="s0">img</span><span class="s2">[:, :</span><span class="s5">14</span><span class="s2">]</span>
+            <span class="s3"># 右半边 (后14列)</span>
+            <span class="s0">right_half </span><span class="s2">= </span><span class="s0">img</span><span class="s2">[:, </span><span class="s5">14</span><span class="s2">:]</span>
+            <span class="s0">empty </span><span class="s2">= </span><span class="s0">np</span><span class="s2">.</span><span class="s0">zeros</span><span class="s2">((</span><span class="s5">28</span><span class="s2">, </span><span class="s5">14</span><span class="s2">))</span>
+
+            <span class="s3"># 画完整图</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">0</span><span class="s2">].</span><span class="s0">imshow</span><span class="s2">(</span><span class="s0">img</span><span class="s2">, </span><span class="s0">cmap</span><span class="s2">=</span><span class="s4">'gray_r'</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">0</span><span class="s2">].</span><span class="s0">set_title</span><span class="s2">(</span><span class="s4">f&quot;Digit </span><span class="s1">{</span><span class="s0">digit</span><span class="s1">} </span><span class="s4">(Full)&quot;</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">0</span><span class="s2">].</span><span class="s0">axis</span><span class="s2">(</span><span class="s4">'off'</span><span class="s2">)</span>
+
+            <span class="s3"># 画左半边</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">1</span><span class="s2">].</span><span class="s0">imshow</span><span class="s2">(</span><span class="s0">np</span><span class="s2">.</span><span class="s0">hstack</span><span class="s2">((</span><span class="s0">left_half</span><span class="s2">, </span><span class="s0">empty</span><span class="s2">)), </span><span class="s0">cmap</span><span class="s2">=</span><span class="s4">'gray_r'</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">1</span><span class="s2">].</span><span class="s0">set_title</span><span class="s2">(</span><span class="s4">&quot;Left Part&quot;</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">1</span><span class="s2">].</span><span class="s0">axis</span><span class="s2">(</span><span class="s4">'off'</span><span class="s2">)</span>
+
+            <span class="s3"># 画右半边</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">2</span><span class="s2">].</span><span class="s0">imshow</span><span class="s2">(</span><span class="s0">np</span><span class="s2">.</span><span class="s0">hstack</span><span class="s2">((</span><span class="s0">empty</span><span class="s2">, </span><span class="s0">right_half</span><span class="s2">)), </span><span class="s0">cmap</span><span class="s2">=</span><span class="s4">'gray_r'</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">2</span><span class="s2">].</span><span class="s0">set_title</span><span class="s2">(</span><span class="s4">&quot;Right Part&quot;</span><span class="s2">)</span>
+            <span class="s0">axes</span><span class="s2">[</span><span class="s0">row_idx</span><span class="s2">, </span><span class="s5">2</span><span class="s2">].</span><span class="s0">axis</span><span class="s2">(</span><span class="s4">'off'</span><span class="s2">)</span>
+
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">suptitle</span><span class="s2">(</span><span class="s4">&quot;Experiment B: Left/Right Split Visualization&quot;</span><span class="s2">, </span><span class="s0">fontsize</span><span class="s2">=</span><span class="s5">16</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">tight_layout</span><span class="s2">()</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">show</span><span class="s2">()</span>
+
+<span class="s3"># --- 运行此部分 ---</span>
+<span class="s0">run_heat_plot_analysis</span><span class="s2">(</span><span class="s0">X_global</span><span class="s2">, </span><span class="s0">y_global</span><span class="s2">)</span><hr class="ls0"><span class="s0">#%% md 
+### PCA Explore <hr class="ls0">#%% 
+</span><span class="s1">def </span><span class="s0">visualize_pca_insights</span><span class="s2">(</span><span class="s0">X</span><span class="s2">, </span><span class="s0">y</span><span class="s2">):</span>
+    <span class="s0">print</span><span class="s2">(</span><span class="s4">&quot;</span><span class="s1">\n</span><span class="s4">--- Running PCA Insights Analysis ---&quot;</span><span class="s2">)</span>
+
+    <span class="s3"># --- Part 1: Eigen-images (Loading Matrix) ---</span>
+    <span class="s3"># 预处理</span>
+    <span class="s0">selector </span><span class="s2">= </span><span class="s0">VarianceThreshold</span><span class="s2">(</span><span class="s0">threshold</span><span class="s2">=</span><span class="s5">0</span><span class="s2">)</span>
+    <span class="s0">X_filtered </span><span class="s2">= </span><span class="s0">selector</span><span class="s2">.</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">X</span><span class="s2">)</span>
+    <span class="s0">scaler </span><span class="s2">= </span><span class="s0">StandardScaler</span><span class="s2">()</span>
+    <span class="s0">X_std </span><span class="s2">= </span><span class="s0">scaler</span><span class="s2">.</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">X_filtered</span><span class="s2">)</span>
+
+    <span class="s3"># Fit PCA</span>
+    <span class="s0">pca </span><span class="s2">= </span><span class="s0">PCA</span><span class="s2">(</span><span class="s0">n_components</span><span class="s2">=</span><span class="s5">3</span><span class="s2">)</span>
+    <span class="s0">pca</span><span class="s2">.</span><span class="s0">fit</span><span class="s2">(</span><span class="s0">X_std</span><span class="s2">)</span>
+
+    <span class="s3"># 还原特征图</span>
+    <span class="s0">components_full </span><span class="s2">= </span><span class="s0">selector</span><span class="s2">.</span><span class="s0">inverse_transform</span><span class="s2">(</span><span class="s0">pca</span><span class="s2">.</span><span class="s0">components_</span><span class="s2">)</span>
+
+    <span class="s0">fig</span><span class="s2">, </span><span class="s0">axes </span><span class="s2">= </span><span class="s0">plt</span><span class="s2">.</span><span class="s0">subplots</span><span class="s2">(</span><span class="s5">1</span><span class="s2">, </span><span class="s5">3</span><span class="s2">, </span><span class="s0">figsize</span><span class="s2">=(</span><span class="s5">15</span><span class="s2">, </span><span class="s5">5</span><span class="s2">))</span>
+    <span class="s0">titles </span><span class="s2">= [</span>
+        <span class="s4">f&quot;PC1 (</span><span class="s1">{</span><span class="s0">pca</span><span class="s2">.</span><span class="s0">explained_variance_ratio_</span><span class="s2">[</span><span class="s5">0</span><span class="s2">]</span><span class="s1">:</span><span class="s4">.1%</span><span class="s1">} </span><span class="s4">Var)</span><span class="s1">\n</span><span class="s4">Expectation: Ink Density&quot;</span><span class="s2">,</span>
+        <span class="s4">f&quot;PC2 (</span><span class="s1">{</span><span class="s0">pca</span><span class="s2">.</span><span class="s0">explained_variance_ratio_</span><span class="s2">[</span><span class="s5">1</span><span class="s2">]</span><span class="s1">:</span><span class="s4">.1%</span><span class="s1">} </span><span class="s4">Var)</span><span class="s1">\n</span><span class="s4">Expectation: Slant/Thickness&quot;</span><span class="s2">,</span>
+        <span class="s4">f&quot;PC3 (</span><span class="s1">{</span><span class="s0">pca</span><span class="s2">.</span><span class="s0">explained_variance_ratio_</span><span class="s2">[</span><span class="s5">2</span><span class="s2">]</span><span class="s1">:</span><span class="s4">.1%</span><span class="s1">} </span><span class="s4">Var)</span><span class="s1">\n</span><span class="s4">Expectation: Topology&quot;</span>
+    <span class="s2">]</span>
+
+    <span class="s1">for </span><span class="s0">i</span><span class="s2">, </span><span class="s0">ax </span><span class="s1">in </span><span class="s0">enumerate</span><span class="s2">(</span><span class="s0">axes</span><span class="s2">):</span>
+        <span class="s0">img </span><span class="s2">= </span><span class="s0">components_full</span><span class="s2">[</span><span class="s0">i</span><span class="s2">].</span><span class="s0">reshape</span><span class="s2">(</span><span class="s5">28</span><span class="s2">, </span><span class="s5">28</span><span class="s2">)</span>
+        <span class="s0">im </span><span class="s2">= </span><span class="s0">ax</span><span class="s2">.</span><span class="s0">imshow</span><span class="s2">(</span><span class="s0">img</span><span class="s2">, </span><span class="s0">cmap</span><span class="s2">=</span><span class="s4">'seismic'</span><span class="s2">, </span><span class="s0">vmin</span><span class="s2">=-</span><span class="s5">0.15</span><span class="s2">, </span><span class="s0">vmax</span><span class="s2">=</span><span class="s5">0.15</span><span class="s2">)</span>
+        <span class="s0">ax</span><span class="s2">.</span><span class="s0">set_title</span><span class="s2">(</span><span class="s0">titles</span><span class="s2">[</span><span class="s0">i</span><span class="s2">], </span><span class="s0">fontsize</span><span class="s2">=</span><span class="s5">12</span><span class="s2">)</span>
+        <span class="s0">ax</span><span class="s2">.</span><span class="s0">axis</span><span class="s2">(</span><span class="s4">'off'</span><span class="s2">)</span>
+
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">suptitle</span><span class="s2">(</span><span class="s4">&quot;PCA Eigen-images: What features are we extracting?&quot;</span><span class="s2">, </span><span class="s0">fontsize</span><span class="s2">=</span><span class="s5">16</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">colorbar</span><span class="s2">(</span><span class="s0">im</span><span class="s2">, </span><span class="s0">ax</span><span class="s2">=</span><span class="s0">axes</span><span class="s2">.</span><span class="s0">ravel</span><span class="s2">().</span><span class="s0">tolist</span><span class="s2">(), </span><span class="s0">fraction</span><span class="s2">=</span><span class="s5">0.02</span><span class="s2">, </span><span class="s0">pad</span><span class="s2">=</span><span class="s5">0.04</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">show</span><span class="s2">()</span>
+
+    <span class="s3"># --- Part 2: Digit 0 vs Others in PC Space ---</span>
+    <span class="s0">X_pca </span><span class="s2">= </span><span class="s0">pca</span><span class="s2">.</span><span class="s0">transform</span><span class="s2">(</span><span class="s0">X_std</span><span class="s2">) </span><span class="s3"># Reuse the model</span>
+
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">figure</span><span class="s2">(</span><span class="s0">figsize</span><span class="s2">=(</span><span class="s5">10</span><span class="s2">, </span><span class="s5">8</span><span class="s2">))</span>
+    <span class="s3"># 画其他数字</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">scatter</span><span class="s2">(</span><span class="s0">X_pca</span><span class="s2">[</span><span class="s0">y </span><span class="s2">!= </span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s2">], </span><span class="s0">X_pca</span><span class="s2">[</span><span class="s0">y </span><span class="s2">!= </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">],</span>
+                <span class="s0">c</span><span class="s2">=</span><span class="s4">'lightgray'</span><span class="s2">, </span><span class="s0">alpha</span><span class="s2">=</span><span class="s5">0.3</span><span class="s2">, </span><span class="s0">label</span><span class="s2">=</span><span class="s4">'Other Digits'</span><span class="s2">, </span><span class="s0">s</span><span class="s2">=</span><span class="s5">10</span><span class="s2">)</span>
+    <span class="s3"># 画数字 0</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">scatter</span><span class="s2">(</span><span class="s0">X_pca</span><span class="s2">[</span><span class="s0">y </span><span class="s2">== </span><span class="s5">0</span><span class="s2">, </span><span class="s5">0</span><span class="s2">], </span><span class="s0">X_pca</span><span class="s2">[</span><span class="s0">y </span><span class="s2">== </span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">],</span>
+                <span class="s0">c</span><span class="s2">=</span><span class="s4">'red'</span><span class="s2">, </span><span class="s0">alpha</span><span class="s2">=</span><span class="s5">0.6</span><span class="s2">, </span><span class="s0">label</span><span class="s2">=</span><span class="s4">'Digit 0'</span><span class="s2">, </span><span class="s0">s</span><span class="s2">=</span><span class="s5">15</span><span class="s2">)</span>
+
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">xlabel</span><span class="s2">(</span><span class="s4">f'PC1: Center-Surround Score (</span><span class="s1">{</span><span class="s0">pca</span><span class="s2">.</span><span class="s0">explained_variance_ratio_</span><span class="s2">[</span><span class="s5">0</span><span class="s2">]</span><span class="s1">:</span><span class="s4">.1%</span><span class="s1">} </span><span class="s4">Var)'</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">ylabel</span><span class="s2">(</span><span class="s4">f'PC2: Slant/Thickness Score (</span><span class="s1">{</span><span class="s0">pca</span><span class="s2">.</span><span class="s0">explained_variance_ratio_</span><span class="s2">[</span><span class="s5">1</span><span class="s2">]</span><span class="s1">:</span><span class="s4">.1%</span><span class="s1">} </span><span class="s4">Var)'</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">title</span><span class="s2">(</span><span class="s4">&quot;Digit '0' Distribution in Principal Component Space&quot;</span><span class="s2">)</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">legend</span><span class="s2">()</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">show</span><span class="s2">()</span>
+
+<span class="s3"># --- 运行此部分 ---</span>
+<span class="s0">visualize_pca_insights</span><span class="s2">(</span><span class="s0">X_global</span><span class="s2">, </span><span class="s0">y_global</span><span class="s2">)</span><hr class="ls0"><span class="s0">#%% md 
+### 5. CCA Explore <hr class="ls0">#%% 
+</span><span class="s1">def </span><span class="s0">run_cca_experiment</span><span class="s2">(</span><span class="s0">X</span><span class="s2">, </span><span class="s0">y</span><span class="s2">, </span><span class="s0">pca_components</span><span class="s2">=</span><span class="s1">None</span><span class="s2">):</span>
+    <span class="s6">&quot;&quot;&quot; 
+    通用 CCA 分析函数。 
+    参数: 
+      pca_components: None (对应 Raw Pixel) 或 int (对应 PCA-Denoised) 
+    &quot;&quot;&quot;</span>
+    <span class="s0">mode_name </span><span class="s2">= </span><span class="s4">f&quot;PCA-</span><span class="s1">{</span><span class="s0">pca_components</span><span class="s1">}</span><span class="s4">&quot; </span><span class="s1">if </span><span class="s0">pca_components </span><span class="s1">else </span><span class="s4">&quot;Raw Pixels&quot;</span>
+    <span class="s0">print</span><span class="s2">(</span><span class="s4">f&quot;</span><span class="s1">\n</span><span class="s4">&gt;&gt;&gt; Running CCA Analysis Mode: [</span><span class="s1">{</span><span class="s0">mode_name</span><span class="s1">}</span><span class="s4">]&quot;</span><span class="s2">)</span>
+
+    <span class="s0">n </span><span class="s2">= </span><span class="s0">X</span><span class="s2">.</span><span class="s0">shape</span><span class="s2">[</span><span class="s5">0</span><span class="s2">]</span>
+    <span class="s0">X_img </span><span class="s2">= </span><span class="s0">X</span><span class="s2">.</span><span class="s0">reshape</span><span class="s2">(</span><span class="s0">n</span><span class="s2">, </span><span class="s5">28</span><span class="s2">, </span><span class="s5">28</span><span class="s2">)</span>
+
+    <span class="s3"># 1. 构造切分掩码</span>
+    <span class="s0">rows</span><span class="s2">, </span><span class="s0">cols </span><span class="s2">= </span><span class="s0">np</span><span class="s2">.</span><span class="s0">indices</span><span class="s2">((</span><span class="s5">28</span><span class="s2">, </span><span class="s5">28</span><span class="s2">))</span>
+    <span class="s0">mask_main_upper </span><span class="s2">= (</span><span class="s0">rows </span><span class="s2">&lt;= </span><span class="s0">cols</span><span class="s2">)        </span><span class="s3"># Main Diag (\)</span>
+    <span class="s0">mask_anti_upper </span><span class="s2">= (</span><span class="s0">rows </span><span class="s2">+ </span><span class="s0">cols </span><span class="s2">&lt;= </span><span class="s5">27</span><span class="s2">)   </span><span class="s3"># Anti Diag (/)</span>
+
+    <span class="s3"># 2. 定义四种切分</span>
+    <span class="s0">splits </span><span class="s2">= {</span>
+        <span class="s4">'L/R (Vertical)'</span><span class="s2">: (</span>
+            <span class="s0">X_img</span><span class="s2">[:, :, :</span><span class="s5">14</span><span class="s2">].</span><span class="s0">reshape</span><span class="s2">(</span><span class="s0">n</span><span class="s2">, -</span><span class="s5">1</span><span class="s2">),</span>
+            <span class="s0">X_img</span><span class="s2">[:, :, </span><span class="s5">14</span><span class="s2">:].</span><span class="s0">reshape</span><span class="s2">(</span><span class="s0">n</span><span class="s2">, -</span><span class="s5">1</span><span class="s2">)</span>
+        <span class="s2">),</span>
+        <span class="s4">'T/B (Horizontal)'</span><span class="s2">: (</span>
+            <span class="s0">X_img</span><span class="s2">[:, :</span><span class="s5">14</span><span class="s2">, :].</span><span class="s0">reshape</span><span class="s2">(</span><span class="s0">n</span><span class="s2">, -</span><span class="s5">1</span><span class="s2">),</span>
+            <span class="s0">X_img</span><span class="s2">[:, </span><span class="s5">14</span><span class="s2">:, :].</span><span class="s0">reshape</span><span class="s2">(</span><span class="s0">n</span><span class="s2">, -</span><span class="s5">1</span><span class="s2">)</span>
+        <span class="s2">),</span>
+        <span class="s4">'Main Diag (</span><span class="s1">\\</span><span class="s4">)'</span><span class="s2">: (</span>
+            <span class="s0">X_img</span><span class="s2">[:, </span><span class="s0">mask_main_upper</span><span class="s2">],</span>
+            <span class="s0">X_img</span><span class="s2">[:, ~</span><span class="s0">mask_main_upper</span><span class="s2">]</span>
+        <span class="s2">),</span>
+        <span class="s4">'Anti Diag (/)'</span><span class="s2">: (</span>
+            <span class="s0">X_img</span><span class="s2">[:, </span><span class="s0">mask_anti_upper</span><span class="s2">],</span>
+            <span class="s0">X_img</span><span class="s2">[:, ~</span><span class="s0">mask_anti_upper</span><span class="s2">]</span>
+        <span class="s2">)</span>
+    <span class="s2">}</span>
+
+    <span class="s0">results </span><span class="s2">= {</span><span class="s4">'Digit'</span><span class="s2">: [], </span><span class="s4">'Split Type'</span><span class="s2">: [], </span><span class="s4">'Correlation'</span><span class="s2">: [], </span><span class="s4">'Unexplained Variance'</span><span class="s2">: []}</span>
+
+    <span class="s1">for </span><span class="s0">name</span><span class="s2">, (</span><span class="s0">view1_raw</span><span class="s2">, </span><span class="s0">view2_raw</span><span class="s2">) </span><span class="s1">in </span><span class="s0">splits</span><span class="s2">.</span><span class="s0">items</span><span class="s2">():</span>
+        <span class="s0">print</span><span class="s2">(</span><span class="s4">f&quot;  Processing split: </span><span class="s1">{</span><span class="s0">name</span><span class="s1">}</span><span class="s4">...&quot;</span><span class="s2">)</span>
+
+        <span class="s3"># Step A: 基础清理</span>
+        <span class="s0">sel1 </span><span class="s2">= </span><span class="s0">VarianceThreshold</span><span class="s2">(</span><span class="s5">0</span><span class="s2">)</span>
+        <span class="s0">sel2 </span><span class="s2">= </span><span class="s0">VarianceThreshold</span><span class="s2">(</span><span class="s5">0</span><span class="s2">)</span>
+        <span class="s1">try</span><span class="s2">:</span>
+            <span class="s0">v1 </span><span class="s2">= </span><span class="s0">sel1</span><span class="s2">.</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">view1_raw</span><span class="s2">)</span>
+            <span class="s0">v2 </span><span class="s2">= </span><span class="s0">sel2</span><span class="s2">.</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">view2_raw</span><span class="s2">)</span>
+        <span class="s1">except </span><span class="s0">ValueError</span><span class="s2">:</span>
+            <span class="s0">print</span><span class="s2">(</span><span class="s4">f&quot;Skipping </span><span class="s1">{</span><span class="s0">name</span><span class="s1">}</span><span class="s4">: Constant data.&quot;</span><span class="s2">)</span>
+            <span class="s1">continue</span>
+
+        <span class="s3"># Step B: 标准化 (Standardize)</span>
+        <span class="s0">v1 </span><span class="s2">= </span><span class="s0">StandardScaler</span><span class="s2">().</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">v1</span><span class="s2">)</span>
+        <span class="s0">v2 </span><span class="s2">= </span><span class="s0">StandardScaler</span><span class="s2">().</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">v2</span><span class="s2">)</span>
+
+        <span class="s3"># Step C: 可选 PCA 降维</span>
+        <span class="s1">if </span><span class="s0">pca_components </span><span class="s1">is not None</span><span class="s2">:</span>
+            <span class="s0">n_pca </span><span class="s2">= </span><span class="s0">min</span><span class="s2">(</span><span class="s0">pca_components</span><span class="s2">, </span><span class="s0">v1</span><span class="s2">.</span><span class="s0">shape</span><span class="s2">[</span><span class="s5">1</span><span class="s2">], </span><span class="s0">v2</span><span class="s2">.</span><span class="s0">shape</span><span class="s2">[</span><span class="s5">1</span><span class="s2">])</span>
+            <span class="s0">pca1 </span><span class="s2">= </span><span class="s0">PCA</span><span class="s2">(</span><span class="s0">n_components</span><span class="s2">=</span><span class="s0">n_pca</span><span class="s2">, </span><span class="s0">random_state</span><span class="s2">=</span><span class="s5">42</span><span class="s2">)</span>
+            <span class="s0">pca2 </span><span class="s2">= </span><span class="s0">PCA</span><span class="s2">(</span><span class="s0">n_components</span><span class="s2">=</span><span class="s0">n_pca</span><span class="s2">, </span><span class="s0">random_state</span><span class="s2">=</span><span class="s5">42</span><span class="s2">)</span>
+            <span class="s0">v1 </span><span class="s2">= </span><span class="s0">pca1</span><span class="s2">.</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">v1</span><span class="s2">)</span>
+            <span class="s0">v2 </span><span class="s2">= </span><span class="s0">pca2</span><span class="s2">.</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">v2</span><span class="s2">)</span>
+
+        <span class="s3"># Step D: CCA Global Fit</span>
+        <span class="s0">cca </span><span class="s2">= </span><span class="s0">CCA</span><span class="s2">(</span><span class="s0">n_components</span><span class="s2">=</span><span class="s5">1</span><span class="s2">)</span>
+        <span class="s1">try</span><span class="s2">:</span>
+            <span class="s0">U</span><span class="s2">, </span><span class="s0">V </span><span class="s2">= </span><span class="s0">cca</span><span class="s2">.</span><span class="s0">fit_transform</span><span class="s2">(</span><span class="s0">v1</span><span class="s2">, </span><span class="s0">v2</span><span class="s2">)</span>
+        <span class="s1">except </span><span class="s0">Exception </span><span class="s1">as </span><span class="s0">e</span><span class="s2">:</span>
+            <span class="s0">print</span><span class="s2">(</span><span class="s4">f&quot;CCA Failed: </span><span class="s1">{</span><span class="s0">e</span><span class="s1">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+            <span class="s1">continue</span>
+
+        <span class="s3"># Step E: Subgroup Analysis</span>
+        <span class="s1">for </span><span class="s0">d </span><span class="s1">in </span><span class="s0">range</span><span class="s2">(</span><span class="s5">10</span><span class="s2">):</span>
+            <span class="s0">idx </span><span class="s2">= (</span><span class="s0">y </span><span class="s2">== </span><span class="s0">d</span><span class="s2">)</span>
+            <span class="s1">if </span><span class="s0">np</span><span class="s2">.</span><span class="s0">sum</span><span class="s2">(</span><span class="s0">idx</span><span class="s2">) &gt; </span><span class="s5">1</span><span class="s2">:</span>
+                <span class="s0">u_sub </span><span class="s2">= </span><span class="s0">U</span><span class="s2">[</span><span class="s0">idx</span><span class="s2">, </span><span class="s5">0</span><span class="s2">]</span>
+                <span class="s0">v_sub </span><span class="s2">= </span><span class="s0">V</span><span class="s2">[</span><span class="s0">idx</span><span class="s2">, </span><span class="s5">0</span><span class="s2">]</span>
+
+                <span class="s1">if </span><span class="s0">np</span><span class="s2">.</span><span class="s0">std</span><span class="s2">(</span><span class="s0">u_sub</span><span class="s2">) == </span><span class="s5">0 </span><span class="s1">or </span><span class="s0">np</span><span class="s2">.</span><span class="s0">std</span><span class="s2">(</span><span class="s0">v_sub</span><span class="s2">) == </span><span class="s5">0</span><span class="s2">:</span>
+                    <span class="s0">corr </span><span class="s2">= </span><span class="s5">0.0</span>
+                <span class="s1">else</span><span class="s2">:</span>
+                    <span class="s0">corr </span><span class="s2">= </span><span class="s0">np</span><span class="s2">.</span><span class="s0">corrcoef</span><span class="s2">(</span><span class="s0">u_sub</span><span class="s2">, </span><span class="s0">v_sub</span><span class="s2">)[</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1</span><span class="s2">]</span>
+
+                <span class="s0">results</span><span class="s2">[</span><span class="s4">'Digit'</span><span class="s2">].</span><span class="s0">append</span><span class="s2">(</span><span class="s0">d</span><span class="s2">)</span>
+                <span class="s0">results</span><span class="s2">[</span><span class="s4">'Split Type'</span><span class="s2">].</span><span class="s0">append</span><span class="s2">(</span><span class="s0">name</span><span class="s2">)</span>
+                <span class="s0">results</span><span class="s2">[</span><span class="s4">'Correlation'</span><span class="s2">].</span><span class="s0">append</span><span class="s2">(</span><span class="s0">corr</span><span class="s2">)</span>
+                <span class="s0">results</span><span class="s2">[</span><span class="s4">'Unexplained Variance'</span><span class="s2">].</span><span class="s0">append</span><span class="s2">(</span><span class="s5">1 </span><span class="s2">- </span><span class="s0">corr </span><span class="s2">** </span><span class="s5">2</span><span class="s2">)</span>
+
+    <span class="s1">return </span><span class="s0">pd</span><span class="s2">.</span><span class="s0">DataFrame</span><span class="s2">(</span><span class="s0">results</span><span class="s2">)</span>
+
+<span class="s1">def </span><span class="s0">plot_cca_results</span><span class="s2">(</span><span class="s0">res_df</span><span class="s2">, </span><span class="s0">title_suffix</span><span class="s2">=</span><span class="s4">&quot;&quot;</span><span class="s2">):</span>
+    <span class="s0">fig</span><span class="s2">, </span><span class="s0">axes </span><span class="s2">= </span><span class="s0">plt</span><span class="s2">.</span><span class="s0">subplots</span><span class="s2">(</span><span class="s5">2</span><span class="s2">, </span><span class="s5">1</span><span class="s2">, </span><span class="s0">figsize</span><span class="s2">=(</span><span class="s5">16</span><span class="s2">, </span><span class="s5">16</span><span class="s2">))</span>
+
+    <span class="s3"># Plot 1: Correlation</span>
+    <span class="s0">ax1 </span><span class="s2">= </span><span class="s0">sns</span><span class="s2">.</span><span class="s0">barplot</span><span class="s2">(</span><span class="s0">data</span><span class="s2">=</span><span class="s0">res_df</span><span class="s2">, </span><span class="s0">x</span><span class="s2">=</span><span class="s4">'Digit'</span><span class="s2">, </span><span class="s0">y</span><span class="s2">=</span><span class="s4">'Correlation'</span><span class="s2">, </span><span class="s0">hue</span><span class="s2">=</span><span class="s4">'Split Type'</span><span class="s2">, </span><span class="s0">ax</span><span class="s2">=</span><span class="s0">axes</span><span class="s2">[</span><span class="s5">0</span><span class="s2">], </span><span class="s0">palette</span><span class="s2">=</span><span class="s4">&quot;viridis&quot;</span><span class="s2">)</span>
+    <span class="s0">axes</span><span class="s2">[</span><span class="s5">0</span><span class="s2">].</span><span class="s0">set_title</span><span class="s2">(</span><span class="s4">f&quot;Structural Redundancy: </span><span class="s1">{</span><span class="s0">title_suffix</span><span class="s1">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+    <span class="s0">axes</span><span class="s2">[</span><span class="s5">0</span><span class="s2">].</span><span class="s0">set_ylim</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1.25</span><span class="s2">)</span>
+    <span class="s0">axes</span><span class="s2">[</span><span class="s5">0</span><span class="s2">].</span><span class="s0">legend</span><span class="s2">(</span><span class="s0">bbox_to_anchor</span><span class="s2">=(</span><span class="s5">1.01</span><span class="s2">, </span><span class="s5">1</span><span class="s2">), </span><span class="s0">loc</span><span class="s2">=</span><span class="s4">'upper left'</span><span class="s2">)</span>
+    <span class="s1">for </span><span class="s0">c </span><span class="s1">in </span><span class="s0">ax1</span><span class="s2">.</span><span class="s0">containers</span><span class="s2">:</span>
+        <span class="s0">ax1</span><span class="s2">.</span><span class="s0">bar_label</span><span class="s2">(</span><span class="s0">c</span><span class="s2">, </span><span class="s0">fmt</span><span class="s2">=</span><span class="s4">'%.3f'</span><span class="s2">, </span><span class="s0">padding</span><span class="s2">=</span><span class="s5">3</span><span class="s2">, </span><span class="s0">fontsize</span><span class="s2">=</span><span class="s5">9</span><span class="s2">, </span><span class="s0">rotation</span><span class="s2">=</span><span class="s5">90</span><span class="s2">)</span>
+
+    <span class="s3"># Plot 2: MSE</span>
+    <span class="s0">ax2 </span><span class="s2">= </span><span class="s0">sns</span><span class="s2">.</span><span class="s0">barplot</span><span class="s2">(</span><span class="s0">data</span><span class="s2">=</span><span class="s0">res_df</span><span class="s2">, </span><span class="s0">x</span><span class="s2">=</span><span class="s4">'Digit'</span><span class="s2">, </span><span class="s0">y</span><span class="s2">=</span><span class="s4">'Unexplained Variance'</span><span class="s2">, </span><span class="s0">hue</span><span class="s2">=</span><span class="s4">'Split Type'</span><span class="s2">, </span><span class="s0">ax</span><span class="s2">=</span><span class="s0">axes</span><span class="s2">[</span><span class="s5">1</span><span class="s2">], </span><span class="s0">palette</span><span class="s2">=</span><span class="s4">&quot;rocket&quot;</span><span class="s2">)</span>
+    <span class="s0">axes</span><span class="s2">[</span><span class="s5">1</span><span class="s2">].</span><span class="s0">set_title</span><span class="s2">(</span><span class="s4">f&quot;Structural Uncertainty (1-r^2): </span><span class="s1">{</span><span class="s0">title_suffix</span><span class="s1">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+    <span class="s0">axes</span><span class="s2">[</span><span class="s5">1</span><span class="s2">].</span><span class="s0">set_ylabel</span><span class="s2">(</span><span class="s4">&quot;Unexplained Variance&quot;</span><span class="s2">)</span>
+    <span class="s0">axes</span><span class="s2">[</span><span class="s5">1</span><span class="s2">].</span><span class="s0">set_ylim</span><span class="s2">(</span><span class="s5">0</span><span class="s2">, </span><span class="s5">1.25</span><span class="s2">)</span>
+    <span class="s0">axes</span><span class="s2">[</span><span class="s5">1</span><span class="s2">].</span><span class="s0">legend</span><span class="s2">(</span><span class="s0">bbox_to_anchor</span><span class="s2">=(</span><span class="s5">1.01</span><span class="s2">, </span><span class="s5">1</span><span class="s2">), </span><span class="s0">loc</span><span class="s2">=</span><span class="s4">'upper left'</span><span class="s2">)</span>
+    <span class="s1">for </span><span class="s0">c </span><span class="s1">in </span><span class="s0">ax2</span><span class="s2">.</span><span class="s0">containers</span><span class="s2">:</span>
+        <span class="s0">ax2</span><span class="s2">.</span><span class="s0">bar_label</span><span class="s2">(</span><span class="s0">c</span><span class="s2">, </span><span class="s0">fmt</span><span class="s2">=</span><span class="s4">'%.3f'</span><span class="s2">, </span><span class="s0">padding</span><span class="s2">=</span><span class="s5">3</span><span class="s2">, </span><span class="s0">fontsize</span><span class="s2">=</span><span class="s5">9</span><span class="s2">, </span><span class="s0">rotation</span><span class="s2">=</span><span class="s5">90</span><span class="s2">)</span>
+
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">tight_layout</span><span class="s2">()</span>
+    <span class="s0">plt</span><span class="s2">.</span><span class="s0">show</span><span class="s2">()</span><hr class="ls0"><span class="s0">#%% md 
+### 6. CCA Execution with PCA 
+ <hr class="ls0">#%% 
+</span><span class="s3"># 运行不带 PCA 的版本</span>
+<span class="s0">df_raw </span><span class="s2">= </span><span class="s0">run_cca_experiment</span><span class="s2">(</span><span class="s0">X_global</span><span class="s2">, </span><span class="s0">y_global</span><span class="s2">, </span><span class="s0">pca_components</span><span class="s2">=</span><span class="s1">None</span><span class="s2">)</span>
+
+<span class="s3"># 画图</span>
+<span class="s0">plot_cca_results</span><span class="s2">(</span><span class="s0">df_raw</span><span class="s2">, </span><span class="s0">title_suffix</span><span class="s2">=</span><span class="s4">&quot;Raw Pixels (Baseline)&quot;</span><span class="s2">)</span><hr class="ls0"><span class="s0">#%% md 
+### 7. CCA Execution: Without PCA <hr class="ls0">#%% 
+</span><span class="s3"># 运行 PCA-5 版本 (强力去噪)</span>
+<span class="s0">df_pca5 </span><span class="s2">= </span><span class="s0">run_cca_experiment</span><span class="s2">(</span><span class="s0">X_global</span><span class="s2">, </span><span class="s0">y_global</span><span class="s2">, </span><span class="s0">pca_components</span><span class="s2">=</span><span class="s5">5</span><span class="s2">)</span>
+
+<span class="s3"># 画图</span>
+<span class="s0">plot_cca_results</span><span class="s2">(</span><span class="s0">df_pca5</span><span class="s2">, </span><span class="s0">title_suffix</span><span class="s2">=</span><span class="s4">&quot;PCA-5 Denoised (Final Result)&quot;</span><span class="s2">)</span></pre>
+</body>
+</html>
