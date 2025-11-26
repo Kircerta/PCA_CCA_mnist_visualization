@@ -42,7 +42,7 @@ def analyze_local_mnist_geometry(filepath='mnist.csv'):
     TARGET_DIGITS = range(10)  # Analyze 0 to 9
     IMG_SIZE = 28
     CUT_COL = 14  # Split at column 14
-    PCA_N = 30  # Reduced dimension
+    PCA_N = 10  # Reduced dimension
 
     # Visualization Grid: 2 rows x 5 columns
     fig, axes = plt.subplots(2, 5, figsize=(20, 8))
