@@ -26,7 +26,7 @@ def compare_whole_pca_vs_cca_fixed(filepath='mnist.csv'):
     TARGET_DIGITS = range(10)
     IMG_SIZE = 28
     CUT_COL = 14
-    PCA_N_LOCAL = 30
+    PCA_N_LOCAL = 20
 
     fig, axes = plt.subplots(10, 3, figsize=(12, 25))
     plt.subplots_adjust(hspace=0.3, wspace=0.1)
