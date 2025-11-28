@@ -8,12 +8,12 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 
-# --- 1. 全局配置与基础工具 ---
 DATA_PATH = "mnist.csv"
 sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
 if not os.path.exists("plots"):
     os.makedirs("plots")
 
+# Functions
 
 def load_data_global(path, sample_size=None):
     """
@@ -35,7 +35,6 @@ def load_data_global(path, sample_size=None):
     print(f"Data Loaded. Shape: {X.shape}")
     return X, y
 
-
 def get_image_splits(X_input, mode='LR', img_size=28):
     """
     【核心工具】统一处理图像切分逻辑
@@ -56,7 +55,6 @@ def get_image_splits(X_input, mode='LR', img_size=28):
         splits['Bottom'] = X_img[:, cut:, :].reshape(n_samples, -1)
 
     return splits
-
 
 def compute_pca_cca_pipeline(X1, X2, n_components):
     """
@@ -87,10 +85,7 @@ def compute_pca_cca_pipeline(X1, X2, n_components):
         print(f"Pipeline Error: {e}")
         return None
 
-
-# --- 2. 具体的分析与绘图任务 ---
-
-def visualize_cca_geometry(X, y, n_components=5, mode='LR'):
+def visualize_cca_geometry(X, y, n_components, mode='LR'):
     """
     合并了原先的 visualize_pure_cca_mode (LR) 和 run_top_bottom_experiment (TB)
     只需指定 mode='LR' 或 mode='TB'
@@ -145,8 +140,7 @@ def visualize_cca_geometry(X, y, n_components=5, mode='LR'):
     plt.tight_layout()
     plt.show()
 
-
-def verify_variance_coverage(X, y, n_components=15):
+def verify_variance_coverage(X, y, n_components):
     """
     检查 PCA 解释的方差比例
     """
@@ -169,8 +163,7 @@ def verify_variance_coverage(X, y, n_components=15):
     print(df.set_index("Digit").applymap(lambda x: f"{x:.1%}").to_markdown())
     print(f"Average Variance (Left): {df['Left_Var'].mean():.1%}")
 
-
-def inspect_cca_weights_unified(X, y, target_digit, n_components=5, mode='TB'):
+def inspect_cca_weights_unified(X, y, target_digit, n_components, mode='TB'):
     """
     合并了原先的 inspect_cca_weights (TB) 和 inspect_cca_weights_lr (LR)
     """
@@ -210,8 +203,57 @@ def inspect_cca_weights_unified(X, y, target_digit, n_components=5, mode='TB'):
     plt.tight_layout()
     plt.show()
 
+def inspect_cca_weights_numeric_output(X, y, target_digit, n_components):
+    print(f"\n=== CCA Weight Inspection for Digit {target_digit} (Top-Bottom Split) ===")
 
-def visualize_pc_matrix_unified(X, y, target_digit, n_comps=5):
+    # --- 1. 数据准备 ---
+    X_digit = X[y == target_digit]
+    X_norm = X_digit / 255.0
+    n_samples = X_norm.shape[0]
+
+    IMG_SIZE = 28
+    CUT_ROW = 14
+
+    X_img = X_norm.reshape(n_samples, IMG_SIZE, IMG_SIZE)
+    X_top = X_img[:, :CUT_ROW, :].reshape(n_samples, -1)
+    X_bottom = X_img[:, CUT_ROW:, :].reshape(n_samples, -1)
+
+    # --- 2. PCA 降维 ---
+    pca_t = PCA(n_components=n_components, random_state=42)
+    pca_b = PCA(n_components=n_components, random_state=42)
+
+    X_t_pca = pca_t.fit_transform(X_top)
+    X_b_pca = pca_b.fit_transform(X_bottom)
+
+    # --- 3. CCA 核心 ---
+    cca = CCA(n_components=1)
+    cca.fit(X_t_pca, X_b_pca)
+
+    # [!] 获取权重 [!]
+    # x_weights_ 对应 X_top 的权重
+    # y_weights_ 对应 X_bottom 的权重
+    # shape is (n_features, n_components), we want the first component
+    w_top = cca.x_weights_[:, 0]
+    w_bottom = cca.y_weights_[:, 0]
+
+    # --- 4. 打印数值表格 ---
+    print("\n--- CCA Weight Distribution ---")
+    df_weights = pd.DataFrame({
+        "PC_Index": [f"PC{i + 1}" for i in range(n_components)],
+        "Top_Weight": w_top,
+        "Bottom_Weight": w_bottom,
+        "Abs_Top_Strength": np.abs(w_top)  # 用于排序或观察绝对强度
+    })
+
+    # 打印原始数值
+    print(df_weights.to_markdown(index=False, floatfmt=".4f"))
+
+    # 找出那个“捣乱”的主导成分
+    dominant_idx = np.argmax(np.abs(w_top))
+    print(
+        f"\n[Observation] The dominant component in Top half is PC{dominant_idx + 1} (Weight: {w_top[dominant_idx]:.4f})")
+
+def visualize_pc_matrix_unified(X, y, target_digit, n_components):
     """
     展示某个数字的 Top/Bottom/Left/Right 前 n 个 PC 的特征图
     """
@@ -228,13 +270,13 @@ def visualize_pc_matrix_unified(X, y, target_digit, n_comps=5):
         ('Right', splits['Right'], (28, 14))
     ]
 
-    fig, axes = plt.subplots(4, n_comps, figsize=(3 * n_comps, 10))
+    fig, axes = plt.subplots(4, n_components, figsize=(3 * n_components, 10))
     cmap = 'seismic'
 
     for row_idx, (name, data, shape) in enumerate(config):
-        pca = PCA(n_components=n_comps, random_state=42).fit(data)
+        pca = PCA(n_components=n_components, random_state=42).fit(data)
 
-        for col_idx in range(n_comps):
+        for col_idx in range(n_components):
             ax = axes[row_idx, col_idx]
             pc_img = pca.components_[col_idx].reshape(shape)
             v_max = np.max(np.abs(pc_img))
@@ -246,10 +288,9 @@ def visualize_pc_matrix_unified(X, y, target_digit, n_comps=5):
             if row_idx == 0: ax.set_title(f"PC {col_idx + 1}", fontweight='bold')
             if col_idx == 0: ax.set_ylabel(name, fontsize=14, fontweight='bold', rotation=90)
 
-    plt.suptitle(f"Geometry Modes: Digit {target_digit} (Top {n_comps} PCs)", fontsize=16, y=0.96)
+    plt.suptitle(f"Geometry Modes: Digit {target_digit} (Top {n_components} PCs)", fontsize=16, y=0.96)
     plt.tight_layout()
     plt.show()
-
 
 def run_hd_reconstruction_demo(X, y):
     """
@@ -298,31 +339,279 @@ def run_hd_reconstruction_demo(X, y):
     for a in ax: a.axis('off')
     plt.show()
 
+def display_top_bottom_split(X, y, target_digit):
 
-# --- 3. 主流程调用函数 ---
+    IMG_SIZE = 28
+    CUT_ROW = 14  # 水平切割点：0-13行为上部，14-27行为下部
+
+    # ---------------------------------------------------------
+    # [SANITY CHECK] 视觉验证切片逻辑
+    # ---------------------------------------------------------
+    # 取出一个数字 0 的样本来看看
+    sample_digit = X[y == target_digit][0].reshape(IMG_SIZE, IMG_SIZE) / 255.0
+
+    # 模拟切片
+    sample_top = sample_digit[:CUT_ROW, :]
+    sample_bottom = sample_digit[CUT_ROW:, :]
+
+    # 绘图验证
+    fig_check, ax_check = plt.subplots(1, 3, figsize=(10, 3))
+    ax_check[0].imshow(sample_digit, cmap='gray')
+    ax_check[0].set_title("Original (Digit 0)")
+
+    ax_check[1].imshow(sample_top, cmap='gray')
+    ax_check[1].set_title("Top Slice (Rows 0-13)")
+
+    ax_check[2].imshow(sample_bottom, cmap='gray')
+    ax_check[2].set_title("Bottom Slice (Rows 14-27)")
+
+    plt.suptitle(" ", fontsize=14, color='red')
+    plt.show()
+    # ---------------------------------------------------------
+
+def visualize_target_digit_pc1_only(X, y, target_digit):
+
+    X_digit = X[y == target_digit]
+    X_norm = X_digit / 255.0
+    n_samples = X_norm.shape[0]
+
+    IMG_SIZE = 28
+    CUT = 14
+
+    # 还原为图像
+    X_img = X_norm.reshape(n_samples, IMG_SIZE, IMG_SIZE)
+
+    # 2. 准备四份数据
+    # Top (Row 0-13)
+    X_top = X_img[:, :CUT, :].reshape(n_samples, -1)
+    # Bottom (Row 14-27)
+    X_bottom = X_img[:, CUT:, :].reshape(n_samples, -1)
+    # Left (Col 0-13)
+    X_left = X_img[:, :, :CUT].reshape(n_samples, -1)
+    # Right (Col 14-27)
+    X_right = X_img[:, :, CUT:].reshape(n_samples, -1)
+
+    # 3. 训练 4 个独立的 PCA (只取 PC1)
+    pca_t = PCA(n_components=1, random_state=42).fit(X_top)
+    pca_b = PCA(n_components=1, random_state=42).fit(X_bottom)
+    pca_l = PCA(n_components=1, random_state=42).fit(X_left)
+    pca_r = PCA(n_components=1, random_state=42).fit(X_right)
+
+    # 4. 绘图 (1行 4列)
+    fig, axes = plt.subplots(1, 4, figsize=(16, 5))
+
+    # 配置列表
+    # (Title, Component, ReshapeSize)
+    plots_config = [
+        ("Top Split PC1\n(Translation?)", pca_t.components_[0], (14, 28)),
+        ("Bottom Split PC1\n(Translation?)", pca_b.components_[0], (14, 28)),
+        ("Left Split PC1\n(Shear/Tilt?)", pca_l.components_[0], (28, 14)),
+        ("Right Split PC1\n(Shear/Tilt?)", pca_r.components_[0], (28, 14))
+    ]
+
+    cmap = 'seismic'
+
+    for ax, (title, component, shape) in zip(axes, plots_config):
+        # Reshape
+        pc_img = component.reshape(shape)
+
+        # 归一化显示范围，增强对比
+        v_max = np.max(np.abs(pc_img))
+
+        im = ax.imshow(pc_img, cmap=cmap, vmin=-v_max, vmax=v_max)
+        ax.set_title(title, fontsize=12, fontweight='bold')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        # 添加边框以示区分
+        for spine in ax.spines.values():
+            spine.set_edgecolor('gray')
+            spine.set_linewidth(1)
+
+    # 添加 Colorbar
+    cbar_ax = fig.add_axes([0.92, 0.2, 0.015, 0.6])
+    fig.colorbar(im, cax=cbar_ax, label='Pixel Weight (Red+, Blue-)')
+    plt.subplots_adjust(wspace=0.3)
+    plt.show()
+
+def display_number(target_digit):
+
+    df = pd.read_csv('mnist.csv')
+
+    # Select 10 Random Sample of the Given Number, Change target number after "=="
+    # igit_2_data = df[df.iloc[:, 0] == <Insert Your Number Here>]
+
+    digit_2_data = df[df.iloc[:, 0] == target_digit]
+
+    # 3. 随机抽取 10 个样本
+    # random_state=42 保证每次抽取的样本一致，如果想看不同的可以去掉它
+    samples = digit_2_data.sample(10, random_state=42)
+
+    # 4. 可视化
+    fig, axes = plt.subplots(1, 10, figsize=(15, 2)) # 创建 1行10列 的画布
+
+    for i, (index, row) in enumerate(samples.iterrows()):
+        # 提取像素数据：去掉第一列 label，剩下的部分转换为 numpy 数组
+        pixel_values = row.iloc[1:].values
+
+        # 将 Flattened (1, 784) 数据 Reshape 为 (28, 28)
+        image_matrix = pixel_values.reshape(28, 28)
+
+        # 绘图
+        axes[i].imshow(image_matrix, cmap='gray') # 使用灰度图显示
+        axes[i].axis('off') # 关闭坐标轴刻度
+        axes[i].set_title(f"Sample {i+1}")
+
+    plt.suptitle("Random Samples of Digit '2'", fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+def plot_4way_scree(X, n_components):
+    """
+    绘制 Top/Bottom/Left/Right 四种切分方式的 PCA Scree Plot
+    用于论证保留多少个主成分是合适的
+    """
+    print(f"\n--- Generating 4-Way Scree Plots (Top {n_components} PCs) ---")
+
+    # 1. 获取四种切分数据 (使用全部数据或大样本)
+    # 注意：这里我们传入归一化后的数据 / 255.0
+    splits = get_image_splits(X / 255.0, mode='4Way')
+
+    # 2. 设置绘图布局
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+    pc_nums = np.arange(1, n_components + 1)
+
+    # 定义顺序和颜色
+    config = [
+        ('Top Half', splits['Top'], '#4c72b0'),
+        ('Bottom Half', splits['Bottom'], '#dd8452'),
+        ('Left Half', splits['Left'], '#55a868'),
+        ('Right Half', splits['Right'], '#c44e52')
+    ]
+
+    for i, (name, X_part, color) in enumerate(config):
+        # 运行 PCA
+        pca = PCA(n_components=n_components, random_state=42)
+        pca.fit(X_part)
+        var_ratio = pca.explained_variance_ratio_
+
+        # 绘图
+        ax = axes[i]
+        ax.plot(pc_nums, var_ratio, marker='o', linestyle='-', color=color, linewidth=2, markersize=6)
+
+        # 标注前 3 个点的数值
+        for j, val in enumerate(var_ratio[:3]):
+            ax.text(pc_nums[j], val + 0.005, f'{val:.1%}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+        ax.set_title(f'{name} - Explained Variance', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Principal Component')
+        ax.set_ylabel('Variance Ratio')
+        ax.set_xticks(pc_nums[::2])
+        ax.grid(True, linestyle='--', alpha=0.6)
+
+    plt.suptitle(f'PCA Scree Plots: Variance Retention by Spatial Partition', fontsize=16, y=1.02)
+    plt.tight_layout()
+    plt.show()
+
+def plot_correlation_summary_bars(X, y, n_components):
+    """
+    计算并绘制 0-9 所有数字在 LR (左右) 和 UD (上下) 模式下的 CCA 相关性柱状图
+    """
+    print(f"\n--- Generating Correlation Summary Barplots (PCA k={n_components}) ---")
+
+    results = []
+
+    # 1. 遍历计算所有数字的相关性
+    for digit in range(10):
+        X_digit = X[y == digit] / 255.0
+
+        # 避免样本过少
+        if X_digit.shape[0] < n_components + 1:
+            continue
+
+        # 切分
+        splits = get_image_splits(X_digit, mode='4Way')
+
+        # 计算 LR 相关性
+        res_lr = compute_pca_cca_pipeline(splits['Left'], splits['Right'], n_components)
+        corr_lr = res_lr['corr'] if res_lr else 0
+
+        # 计算 UD 相关性
+        res_ud = compute_pca_cca_pipeline(splits['Top'], splits['Bottom'], n_components)
+        corr_ud = res_ud['corr'] if res_ud else 0
+
+        results.append({
+            'Digit': digit,
+            'LR_Correlation': corr_lr,
+            'UD_Correlation': corr_ud
+        })
+
+    df_results = pd.DataFrame(results)
+
+    # 2. 绘图 (两个子图)
+    # 定义配置：(数据列, 标题, 颜色)
+    plot_configs = [
+        ('LR_Correlation', 'Left-Right Correlation', '#87CEEB'),  # SkyBlue
+        ('UD_Correlation', 'Up-Down Correlation', '#F08080')  # LightCoral
+    ]
+
+    for col, title, color_code in plot_configs:
+        plt.figure(figsize=(8, 4))
+
+        # 绘制柱状图
+        sns.barplot(x='Digit', y=col, data=df_results, color=color_code, alpha=0.9, edgecolor=".2")
+
+        plt.title(f'{title} (PCA k={n_components})', fontweight='bold')
+        plt.ylabel('Canonical Correlation')
+        plt.ylim(0, 1.05)
+        plt.grid(axis='y', linestyle='--', alpha=0.5)
+
+        # 在柱子上标数值
+        for index, row in df_results.iterrows():
+            plt.text(row.name, row[col] + 0.02, f'{row[col]:.2f}', color='black', ha="center", fontsize=10)
+
+        plt.tight_layout()
+        plt.show()
+
 def run_full_analysis(n_components, target_digit):
-    # 1. 加载数据 (只做一次)
+    # Utility to Run Everything
     X, y = load_data_global(DATA_PATH, sample_size=5000)
     if X is None: return
 
-    # 2. 几何关联分析 (Left-Right) - 对应原 visualize_pure_cca_mode
+    display_top_bottom_split(X, y, target_digit)
+
+    visualize_target_digit_pc1_only(X, y, target_digit)
+
+    # 2. Left/Right CCA Plot
     visualize_cca_geometry(X, y, n_components, mode='LR')
 
-    # 3. 几何关联分析 (Top-Bottom) - 对应原 run_top_bottom_experiment
+    # 3. Top/Bottom CCA Plot
     visualize_cca_geometry(X, y, n_components, mode='TB')
 
-    # 4. 权重检查 - 对应原 inspect_cca_weights
+    # 4. Top/Bottom CCA Weight Barplot
     inspect_cca_weights_unified(X, y, target_digit, mode='TB')
 
+    # 5. Left/Right CCA Weight Barplot
     inspect_cca_weights_unified(X, y, target_digit, mode='LR')
 
-    # 5. 特征矩阵 - 对应原 visualize_pc_matrix...
+    # 6. Display PCs'Heatmap Visualizations of All Four Splits
     visualize_pc_matrix_unified(X, y, target_digit)
 
-    # 6. 方差验证 - 对应原 verify_variance_coverage
-    verify_variance_coverage(X, y, n_components)
+    # 7. Scree Plot and Variance Explained Output in Table
 
-    # 7. 还原演示
+    verify_variance_coverage(X, y, n_components)
+    plot_4way_scree(X, n_components=20)
+
+    # 8. CCA weight for each number output
+    inspect_cca_weights_numeric_output(X, y, target_digit, n_components)
+
+    # 9. Correlation Barplot
+    plot_correlation_summary_bars(X, y, n_components)
+
+    # 10. Linear Regression to Restore Number
     run_hd_reconstruction_demo(X, y)
+
+# --- RUN EVERYTHING ---
 
 run_full_analysis(n_components = 5,target_digit = 2)
