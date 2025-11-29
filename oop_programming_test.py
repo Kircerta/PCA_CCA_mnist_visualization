@@ -292,51 +292,100 @@ def visualize_pc_matrix_unified(X, y, target_digit, n_components):
     plt.tight_layout()
     plt.show()
 
-def run_hd_reconstruction_demo(X, y):
+def run_hd_reconstruction_demo(X, y, n_components=5, target_digit=None):
     """
-    左半边 -> 右半边 线性回归还原演示
+    参数 target_digit:
+      - 如果传入数字 (例如 5), 则只从数字 5 中随机抽取样本进行还原。
+      - 如果为 None, 则在所有数据中完全随机抽取。
     """
-    print(f"\n=== Running HD Reconstruction Demo ===")
+    print(f"\n=== Running HD Reconstruction Demo (LR & TB) ===")
     n_samples = X.shape[0]
 
-    # 1. 切分 (使用 helper)
-    splits = get_image_splits(X / 255.0, mode='LR')  # 注意这里传入归一化数据
-    X_left, X_right = splits['Left'], splits['Right']
+    # 1. 统一数据准备
+    splits = get_image_splits(X / 255.0, mode='4Way')
 
-    # 2. 标准化 (Standardization for PCA/Regression)
+    X_left, X_right = splits['Left'], splits['Right']
+    X_top, X_bottom = splits['Top'], splits['Bottom']
+
+    # 2. 标准化
     scaler_l, scaler_r = StandardScaler(), StandardScaler()
     X_l_std = scaler_l.fit_transform(X_left)
     X_r_std = scaler_r.fit_transform(X_right)
 
-    # 3. PCA & Regression
-    n_components = 5
-    pca_l = PCA(n_components=n_components, random_state=42)
-    pca_r = PCA(n_components=n_components, random_state=42)
-    Z_l = pca_l.fit_transform(X_l_std)
-    Z_r = pca_r.fit_transform(X_r_std)
+    scaler_t, scaler_b = StandardScaler(), StandardScaler()
+    X_t_std = scaler_t.fit_transform(X_top)
+    X_b_std = scaler_b.fit_transform(X_bottom)
 
-    mapper = LinearRegression().fit(Z_l, Z_r)
-    print(f"R^2 Score (Left->Right): {mapper.score(Z_l, Z_r):.4f}")
+    # 3. PCA 降维 & 线性回归训练
+    print(f"Training Mapping Models (k={n_components})...")
 
-    # 4. 随机抽样还原
-    idx = np.random.randint(0, n_samples)
+    # Left -> Right
+    pca_l = PCA(n_components=n_components, random_state=42).fit(X_l_std)
+    pca_r = PCA(n_components=n_components, random_state=42).fit(X_r_std)
+    Z_l = pca_l.transform(X_l_std)
+    Z_r = pca_r.transform(X_r_std)
+    map_lr = LinearRegression().fit(Z_l, Z_r)
+    score_lr = map_lr.score(Z_l, Z_r)
 
-    # 预测过程
+    # Top -> Bottom
+    pca_t = PCA(n_components=n_components, random_state=42).fit(X_t_std)
+    pca_b = PCA(n_components=n_components, random_state=42).fit(X_b_std)
+    Z_t = pca_t.transform(X_t_std)
+    Z_b = pca_b.transform(X_b_std)
+    map_tb = LinearRegression().fit(Z_t, Z_b)
+    score_tb = map_tb.score(Z_t, Z_b)
+
+    print(f"R^2 Score (Left->Right): {score_lr:.4f}")
+    print(f"R^2 Score (Top->Bottom): {score_tb:.4f}")
+
+    # ==========================================
+    # 4. 指定数字抽样 (修改了这里)
+    # ==========================================
+    if target_digit is not None:
+        # 找到所有标签等于 target_digit 的索引
+        candidate_indices = np.where(y == target_digit)[0]
+        if len(candidate_indices) > 0:
+            idx = np.random.choice(candidate_indices)
+            print(f"Selected random sample from digit '{target_digit}' (Index: {idx})")
+        else:
+            print(f"Warning: No samples found for digit {target_digit}. Picking random.")
+            idx = np.random.randint(0, n_samples)
+    else:
+        # 如果没指定，就全随机
+        idx = np.random.randint(0, n_samples)
+        print(f"Selected random sample from all digits (Index: {idx})")
+
+    # --- 还原 Left -> Right ---
     z_l_sample = Z_l[idx].reshape(1, -1)
-    z_r_pred = mapper.predict(z_l_sample)
+    z_r_pred = map_lr.predict(z_l_sample)
     x_r_rec = scaler_r.inverse_transform(pca_r.inverse_transform(z_r_pred))
 
-    # 拼接显示
-    img_orig = (X[idx] / 255.0).reshape(28, 28)
-    img_rec_right = x_r_rec.reshape(28, 14)
-    img_full_rec = np.hstack((img_orig[:, :14], img_rec_right))
+    # --- 还原 Top -> Bottom ---
+    z_t_sample = Z_t[idx].reshape(1, -1)
+    z_b_pred = map_tb.predict(z_t_sample)
+    x_b_rec = scaler_b.inverse_transform(pca_b.inverse_transform(z_b_pred))
 
-    fig, ax = plt.subplots(1, 2, figsize=(8, 4))
-    ax[0].imshow(img_orig, cmap='gray');
-    ax[0].set_title(f"Original (Digit {y[idx]})")
-    ax[1].imshow(img_full_rec, cmap='gray');
-    ax[1].set_title("Reconstructed from Left")
-    for a in ax: a.axis('off')
+    # 5. 图像拼接
+    img_orig = (X[idx] / 255.0).reshape(28, 28)
+    img_rec_lr = np.hstack((img_orig[:, :14], x_r_rec.reshape(28, 14)))
+    img_rec_tb = np.vstack((img_orig[:14, :], x_b_rec.reshape(14, 28)))
+
+    # 6. 可视化
+    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
+
+    axes[0].imshow(img_orig, cmap='gray')
+    axes[0].set_title(f"Original (Digit {y[idx]})")
+    axes[0].axis('off')
+
+    axes[1].imshow(img_rec_lr, cmap='gray')
+    axes[1].set_title(f"Left -> Right Rec\n(R^2: {score_lr:.2f})")
+    axes[1].axis('off')
+
+    axes[2].imshow(img_rec_tb, cmap='gray')
+    axes[2].set_title(f"Top -> Bottom Rec\n(R^2: {score_tb:.2f})")
+    axes[2].axis('off')
+
+    plt.tight_layout()
     plt.show()
 
 def display_top_bottom_split(X, y, target_digit):
@@ -369,72 +418,133 @@ def display_top_bottom_split(X, y, target_digit):
     plt.show()
     # ---------------------------------------------------------
 
-def visualize_target_digit_pc1_only(X, y, target_digit):
+def run_hd_reconstruction_demo(X, y, n_components=5, target_digit=None, train_class_specific=True):
+    """
+    参数:
+    target_digit: 要还原的目标数字 (例如 5)。如果不填，则随机选一个。
+    train_class_specific:
+        - True (默认/论文模式): 仅使用该数字的样本(N=500)来训练模型。严谨验证该数字内部结构。
+        - False (通用模式): 使用整个数据集 X 训练模型。
+    """
+    print(f"\n=== Running HD Reconstruction Demo ===")
 
-    X_digit = X[y == target_digit]
-    X_norm = X_digit / 255.0
-    n_samples = X_norm.shape[0]
+    # 0. 确定目标数字
+    if target_digit is None:
+        target_digit = np.random.choice(np.unique(y))
+    print(f"Target Digit: {target_digit}")
 
-    IMG_SIZE = 28
-    CUT = 14
+    # 1. 确定训练集 (Training Set)
+    if train_class_specific:
+        print(f"--> Mode: Class-Specific Training (Training ONLY on digit {target_digit})")
+        # 只筛选出该数字的数据用于训练
+        train_mask = (y == target_digit)
+        X_train = X[train_mask]
 
-    # 还原为图像
-    X_img = X_norm.reshape(n_samples, IMG_SIZE, IMG_SIZE)
+        if len(X_train) < n_components + 1:
+            print("Error: Not enough samples for this digit!")
+            return
+    else:
+        print(f"--> Mode: Global Training (Training on ALL digits)")
+        # 使用全部数据训练
+        X_train = X
 
-    # 2. 准备四份数据
-    # Top (Row 0-13)
-    X_top = X_img[:, :CUT, :].reshape(n_samples, -1)
-    # Bottom (Row 14-27)
-    X_bottom = X_img[:, CUT:, :].reshape(n_samples, -1)
-    # Left (Col 0-13)
-    X_left = X_img[:, :, :CUT].reshape(n_samples, -1)
-    # Right (Col 14-27)
-    X_right = X_img[:, :, CUT:].reshape(n_samples, -1)
+    # 2. 统一数据准备 (切分训练集)
+    # 归一化
+    splits_train = get_image_splits(X_train / 255.0, mode='4Way')
 
-    # 3. 训练 4 个独立的 PCA (只取 PC1)
-    pca_t = PCA(n_components=1, random_state=42).fit(X_top)
-    pca_b = PCA(n_components=1, random_state=42).fit(X_bottom)
-    pca_l = PCA(n_components=1, random_state=42).fit(X_left)
-    pca_r = PCA(n_components=1, random_state=42).fit(X_right)
+    X_l_train, X_r_train = splits_train['Left'], splits_train['Right']
+    X_t_train, X_b_train = splits_train['Top'], splits_train['Bottom']
 
-    # 4. 绘图 (1行 4列)
-    fig, axes = plt.subplots(1, 4, figsize=(16, 5))
+    # 3. 标准化 & 训练模型
+    # 我们需要保存 scaler 以便后续对测试样本做同样的变换
+    scaler_l = StandardScaler().fit(X_l_train)
+    scaler_r = StandardScaler().fit(X_r_train)
+    scaler_t = StandardScaler().fit(X_t_train)
+    scaler_b = StandardScaler().fit(X_b_train)
 
-    # 配置列表
-    # (Title, Component, ReshapeSize)
-    plots_config = [
-        ("Top Split PC1\n(Translation?)", pca_t.components_[0], (14, 28)),
-        ("Bottom Split PC1\n(Translation?)", pca_b.components_[0], (14, 28)),
-        ("Left Split PC1\n(Shear/Tilt?)", pca_l.components_[0], (28, 14)),
-        ("Right Split PC1\n(Shear/Tilt?)", pca_r.components_[0], (28, 14))
-    ]
+    # 变换训练数据
+    X_l_std = scaler_l.transform(X_l_train)
+    X_r_std = scaler_r.transform(X_r_train)
+    X_t_std = scaler_t.transform(X_t_train)
+    X_b_std = scaler_b.transform(X_b_train)
 
-    cmap = 'seismic'
+    print(f"Training Models (k={n_components})...")
 
-    for ax, (title, component, shape) in zip(axes, plots_config):
-        # Reshape
-        pc_img = component.reshape(shape)
+    # --- Left -> Right ---
+    pca_l = PCA(n_components=n_components, random_state=42).fit(X_l_std)
+    pca_r = PCA(n_components=n_components, random_state=42).fit(X_r_std)
 
-        # 归一化显示范围，增强对比
-        v_max = np.max(np.abs(pc_img))
+    Z_l = pca_l.transform(X_l_std)
+    Z_r = pca_r.transform(X_r_std)
 
-        im = ax.imshow(pc_img, cmap=cmap, vmin=-v_max, vmax=v_max)
-        ax.set_title(title, fontsize=12, fontweight='bold')
-        ax.set_xticks([])
-        ax.set_yticks([])
+    map_lr = LinearRegression().fit(Z_l, Z_r)
+    score_lr = map_lr.score(Z_l, Z_r)
 
-        # 添加边框以示区分
-        for spine in ax.spines.values():
-            spine.set_edgecolor('gray')
-            spine.set_linewidth(1)
+    # --- Top -> Bottom ---
+    pca_t = PCA(n_components=n_components, random_state=42).fit(X_t_std)
+    pca_b = PCA(n_components=n_components, random_state=42).fit(X_b_std)
 
-    # 添加 Colorbar
-    cbar_ax = fig.add_axes([0.92, 0.2, 0.015, 0.6])
-    fig.colorbar(im, cax=cbar_ax, label='Pixel Weight (Red+, Blue-)')
-    plt.subplots_adjust(wspace=0.3)
+    Z_t = pca_t.transform(X_t_std)
+    Z_b = pca_b.transform(X_b_std)
+
+    map_tb = LinearRegression().fit(Z_t, Z_b)
+    score_tb = map_tb.score(Z_t, Z_b)
+
+    print(f"R^2 Score (Left->Right): {score_lr:.4f}")
+    print(f"R^2 Score (Top->Bottom): {score_tb:.4f}")
+
+    # ==========================================
+    # 4. 抽样还原 (Testing)
+    # ==========================================
+    # 从该数字的所有样本中随机选一个作为测试
+    # 注意：如果数据量很少，这可能是训练集里的样本（In-sample），但对于演示结构依赖性是可以接受的
+    candidate_indices = np.where(y == target_digit)[0]
+    idx = np.random.choice(candidate_indices)
+
+    print(f"Visualizing sample index: {idx}")
+
+    # 获取该样本的原始数据 (需要重新切分原始X以获取该idx的图像)
+    sample_img_full = (X[idx] / 255.0).reshape(28, 28)
+
+    # 手动切分该样本
+    # Left/Right
+    sample_l = sample_img_full[:, :14].reshape(1, -1)
+    # Top/Bottom
+    sample_t = sample_img_full[:14, :].reshape(1, -1)
+
+    # --- 还原 A: Left -> Right ---
+    # 标准化 -> PCA -> 预测 -> 逆PCA -> 逆标准化
+    samp_l_std = scaler_l.transform(sample_l)
+    z_l_pred = map_lr.predict(pca_l.transform(samp_l_std))
+    x_r_rec = scaler_r.inverse_transform(pca_r.inverse_transform(z_l_pred))
+
+    # --- 还原 B: Top -> Bottom ---
+    samp_t_std = scaler_t.transform(sample_t)
+    z_b_pred = map_tb.predict(pca_t.transform(samp_t_std))
+    x_b_rec = scaler_b.inverse_transform(pca_b.inverse_transform(z_b_pred))
+
+    # 5. 拼接与显示
+    img_rec_lr = np.hstack((sample_img_full[:, :14], x_r_rec.reshape(28, 14)))
+    img_rec_tb = np.vstack((sample_img_full[:14, :], x_b_rec.reshape(14, 28)))
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
+
+    axes[0].imshow(sample_img_full, cmap='gray')
+    axes[0].set_title(f"Original Digit {target_digit}")
+    axes[0].axis('off')
+
+    axes[1].imshow(img_rec_lr, cmap='gray')
+    axes[1].set_title(f"L->R Rec (Specific)\n($R^2$: {score_lr:.2f})")
+    axes[1].axis('off')
+
+    axes[2].imshow(img_rec_tb, cmap='gray')
+    axes[2].set_title(f"T->B Rec (Specific)\n($R^2$: {score_tb:.2f})")
+    axes[2].axis('off')
+
+    plt.tight_layout()
     plt.show()
 
-def display_number(target_digit):
+def display_10samples_number(target_digit):
 
     df = pd.read_csv('mnist.csv')
 
@@ -574,6 +684,73 @@ def plot_correlation_summary_bars(X, y, n_components):
         plt.tight_layout()
         plt.show()
 
+def visualize_digit_pc1_only(X, y, target_digit):
+
+    X_digit = X[y == target_digit]
+    X_norm = X_digit / 255.0
+    n_samples = X_norm.shape[0]
+
+    IMG_SIZE = 28
+    CUT = 14
+
+    # 还原为图像
+    X_img = X_norm.reshape(n_samples, IMG_SIZE, IMG_SIZE)
+
+    # 2. 准备四份数据
+    # Top (Row 0-13)
+    X_top = X_img[:, :CUT, :].reshape(n_samples, -1)
+    # Bottom (Row 14-27)
+    X_bottom = X_img[:, CUT:, :].reshape(n_samples, -1)
+    # Left (Col 0-13)
+    X_left = X_img[:, :, :CUT].reshape(n_samples, -1)
+    # Right (Col 14-27)
+    X_right = X_img[:, :, CUT:].reshape(n_samples, -1)
+
+    # 3. 训练 4 个独立的 PCA (只取 PC1)
+    pca_t = PCA(n_components=1, random_state=42).fit(X_top)
+    pca_b = PCA(n_components=1, random_state=42).fit(X_bottom)
+    pca_l = PCA(n_components=1, random_state=42).fit(X_left)
+    pca_r = PCA(n_components=1, random_state=42).fit(X_right)
+
+    # 4. 绘图 (1行 4列)
+    fig, axes = plt.subplots(1, 4, figsize=(16, 5))
+
+    # 配置列表
+    # (Title, Component, ReshapeSize)
+    plots_config = [
+        ("Top Split PC1", pca_t.components_[0], (14, 28)),
+        ("Bottom Split PC1", pca_b.components_[0], (14, 28)),
+        ("Left Split PC1", pca_l.components_[0], (28, 14)),
+        ("Right Split PC1", pca_r.components_[0], (28, 14))
+    ]
+
+    cmap = 'seismic'
+
+    for ax, (title, component, shape) in zip(axes, plots_config):
+        # Reshape
+        pc_img = component.reshape(shape)
+
+        # 归一化显示范围，增强对比
+        v_max = np.max(np.abs(pc_img))
+
+        im = ax.imshow(pc_img, cmap=cmap, vmin=-v_max, vmax=v_max)
+        ax.set_title(title, fontsize=12, fontweight='bold')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        # 添加边框以示区分
+        for spine in ax.spines.values():
+            spine.set_edgecolor('gray')
+            spine.set_linewidth(1)
+
+    # 添加 Colorbar
+    cbar_ax = fig.add_axes([0.92, 0.2, 0.015, 0.6])
+    fig.colorbar(im, cax=cbar_ax, label='Pixel Weight (Red+, Blue-)')
+    plt.subplots_adjust(wspace=0.3)
+    plt.show()
+
+# --- RUN EVERYTHING ---
+
 def run_full_analysis(n_components, target_digit):
     # Utility to Run Everything
     X, y = load_data_global(DATA_PATH, sample_size=5000)
@@ -581,7 +758,7 @@ def run_full_analysis(n_components, target_digit):
 
     display_top_bottom_split(X, y, target_digit)
 
-    visualize_target_digit_pc1_only(X, y, target_digit)
+    display_10samples_number(target_digit)
 
     # 2. Left/Right CCA Plot
     visualize_cca_geometry(X, y, n_components, mode='LR')
@@ -590,18 +767,18 @@ def run_full_analysis(n_components, target_digit):
     visualize_cca_geometry(X, y, n_components, mode='TB')
 
     # 4. Top/Bottom CCA Weight Barplot
-    inspect_cca_weights_unified(X, y, target_digit, mode='TB')
+    inspect_cca_weights_unified(X, y, target_digit, n_components, mode='LR')
 
     # 5. Left/Right CCA Weight Barplot
-    inspect_cca_weights_unified(X, y, target_digit, mode='LR')
+    inspect_cca_weights_unified(X, y, target_digit, n_components, mode='TB')
 
     # 6. Display PCs'Heatmap Visualizations of All Four Splits
-    visualize_pc_matrix_unified(X, y, target_digit)
+    visualize_pc_matrix_unified(X, y, target_digit,n_components)
 
     # 7. Scree Plot and Variance Explained Output in Table
 
     verify_variance_coverage(X, y, n_components)
-    plot_4way_scree(X, n_components=20)
+    plot_4way_scree(X, n_components)
 
     # 8. CCA weight for each number output
     inspect_cca_weights_numeric_output(X, y, target_digit, n_components)
@@ -612,6 +789,20 @@ def run_full_analysis(n_components, target_digit):
     # 10. Linear Regression to Restore Number
     run_hd_reconstruction_demo(X, y)
 
-# --- RUN EVERYTHING ---
+    # Utility. Only display number's PC1
+    visualize_digit_pc1_only(X, y, target_digit)
 
-run_full_analysis(n_components = 5,target_digit = 2)
+# --- TESTING AREA: INPUT DESIRED FUNCTION HERE ---
+
+X, y = load_data_global(DATA_PATH, sample_size=5000)
+
+# run_full_analysis(n_components = 5, target_digit = 2)
+
+# visualize_digit_pc1_only(X, y, target_digit = 1)
+# display_10samples_number(target_digit = 1)
+run_hd_reconstruction_demo(X, y, target_digit=2, train_class_specific=True)
+
+# visualize_pc_matrix_unified(X, y, target_digit = 4, n_components = 5)
+
+# Random：
+# run_hd_reconstruction_demo(X, y)
